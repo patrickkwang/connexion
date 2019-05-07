@@ -1,10 +1,11 @@
 import abc
 import copy
+import json
 import pathlib
 
 import jinja2
+import jsonschema
 import yaml
-from openapi_spec_validator.exceptions import OpenAPIValidationError
 from urllib.parse import urlsplit
 
 from .exceptions import InvalidSpecification
@@ -163,6 +164,9 @@ class Swagger2Specification(Specification):
     yaml_name = 'swagger.yaml'
     operation_cls = Swagger2Operation
 
+    response = requests.get('https://raw.githubusercontent.com/OAI/OpenAPI-Specification/6d17b631fff35186c495b9e7d340222e19d60a71/schemas/v2.0/schema.json')
+    openapi_schema = json.loads(response.text)
+
     @classmethod
     def _set_defaults(cls, spec):
         spec.setdefault('produces', [])
@@ -207,16 +211,18 @@ class Swagger2Specification(Specification):
 
     @classmethod
     def _validate_spec(cls, spec):
-        from openapi_spec_validator import validate_v2_spec as validate_spec
         try:
-            validate_spec(spec)
-        except OpenAPIValidationError as e:
-            raise InvalidSpecification.create_from(e)
+            jsonschema.validate(spec, cls.openapi_schema)
+        except jsonschema.exceptions.ValidationError as e:
+            return InvalidSpecification.create_from(e)
 
 
 class OpenAPISpecification(Specification):
     yaml_name = 'openapi.yaml'
     operation_cls = OpenAPIOperation
+
+    response = requests.get('https://raw.githubusercontent.com/OAI/OpenAPI-Specification/6d17b631fff35186c495b9e7d340222e19d60a71/schemas/v3.0/schema.json')
+    openapi_schema = json.loads(response.text)
 
     @classmethod
     def _set_defaults(cls, spec):
@@ -232,11 +238,10 @@ class OpenAPISpecification(Specification):
 
     @classmethod
     def _validate_spec(cls, spec):
-        from openapi_spec_validator import validate_v3_spec as validate_spec
         try:
-            validate_spec(spec)
-        except OpenAPIValidationError as e:
-            raise InvalidSpecification.create_from(e)
+            jsonschema.validate(spec, cls.openapi_schema)
+        except jsonschema.exceptions.ValidationError as e:
+            return InvalidSpecification.create_from(e)
 
     @property
     def base_path(self):
